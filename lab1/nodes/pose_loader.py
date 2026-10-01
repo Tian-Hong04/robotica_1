@@ -2,7 +2,7 @@
 #? ^ Le dice a bash "ejecuta esto con python3" ^
 import rclpy
 from rclpy.node import Node
-import numpy as np # importo numby para calcular el angulo
+import numpy as np
 
 
 from geometry_msgs.msg import PoseArray, Pose
