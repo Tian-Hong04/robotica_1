@@ -66,8 +66,8 @@ class Movement_Node(Node):
             return []   # verificamos si hay que girar o no 
         if angulo > 0:
             w = self.turn_vel 
-        if angulo > 0:
-            -self.turn_vel   # direccion del giro w positivo izquierda negativo derecha
+        if angulo < 0:
+            w = -self.turn_vel   # direccion del giro w positivo izquierda negativo derecha
         t = abs(angulo) / self.turn_vel * self.offset # tiempo a girar con el offset
         return [(0.0, w, t)]   # retorna la velocidad angular y por cuanto tiempo para llegar a la pos
 
@@ -120,6 +120,7 @@ class Movement_Node(Node):
         if self.pos_real_active:
             self.get_logger().info( 'real pos (%f, %f, %f)' % (self.real_x, self.real_y, self.real_z) )
         self.get_logger().info( 'predicted pose (%f, %f, %f)' % (self.predict_pose[0], self.predict_pose[1], self.predict_pose[2]) )
+
 
 def main(args=None):
     rclpy.init(args=args) #? Inicializa ROS
