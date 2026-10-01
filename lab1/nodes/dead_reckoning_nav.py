@@ -2,7 +2,7 @@
 #? ^ Le dice a bash "ejecuta esto con python3" ^
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseArray, Pose
+from geometry_msgs.msg import Twist, PoseArray, Pose, Vector3
 from nav_msgs.msg import Odometry
 import numpy as np
 from threading import Thread
@@ -31,34 +31,41 @@ class Movement_Node(Node):
         self.say_pos_timer = self.create_timer( 2.0, self.say_pos )
         self.offset = 1.1111
         self.predict_pose = [0, 0, 0]
+        self.obstacle = False
+
 
     def init_communications(self):
         self.publisher = self.create_publisher( Twist, "/cmd_vel", 10 )
         self.subscription_goal = self.create_subscription(PoseArray, "goal_list", self.start_moving_node, 1)
         self.subscription_odometry = self.create_subscription(Odometry, "/odom", self.read_odometry, 1)
         self.subscription_real = self.create_subscription(Pose, "/real_pose", self.read_real, 1)
+        self.subscription_obstacle = self.create_subscription(Vector3, "/occupancy_state", self.read_occupancy, 10)
 
+    
     def aplicar_velocidad(self, speed_command_list):
         func_rate = self.create_rate(100)
         for command in speed_command_list:
-            init_time = self.get_clock().now().nanoseconds / 1e9
-            self.velocity.linear.x = command[0]
-            self.velocity.angular.z = command[1]
-            current_time = self.get_clock().now().nanoseconds / 1e9
-            last_cycle_time = current_time
-            while self.get_clock().now().nanoseconds / 1e9 - init_time <= command[2]:
-                current_time = self.get_clock().now().nanoseconds / 1e9
-                time_passed = current_time - last_cycle_time
-                last_cycle_time = current_time
-                self.predict_pose[0] += time_passed * command[0] * np.cos(self.predict_pose[2])
-                self.predict_pose[1] += time_passed * command[0] * np.sin(self.predict_pose[2])
-                self.predict_pose[2] += time_passed * command[1]
+            remaining = command[2]
+            last_time = self.get_clock().now().nanoseconds / 1e9
+            while remaining > 0:
+                now = self.get_clock().now().nanoseconds / 1e9
+                time_passed = now - last_time
+                last_time = now
+
+                if self.obstacle == True:
+                    self.velocity.linear.x = 0.0
+                    self.velocity.angular.z = 0.0
+                else:
+                    self.velocity.linear.x = command[0]
+                    self.velocity.angular.z = command[1]
+                    remaining = remaining - time_passed
+
                 self.publisher.publish(self.velocity)
                 func_rate.sleep()
+        # se termina el tiempo nos detenemos
         self.velocity.linear.x = 0.0
         self.velocity.angular.z = 0.0
         self.publisher.publish(self.velocity)
-        
 
         
     def giro(self, angulo):
@@ -113,6 +120,43 @@ class Movement_Node(Node):
         self.real_y = data.position.y
         self.real_z = data.position.z
         self.pos_real_active = True
+
+
+    def read_occupancy(self, data: Vector3):
+
+        hay_obstaculo = False # revisamos si esta bloqueada alguuna direccion
+        if data.x == 1.0:
+            hay_obstaculo = True
+        if data.y == 1.0:
+            hay_obstaculo = True
+        if data.z == 1.0:
+            hay_obstaculo = True
+
+        if hay_obstaculo == True and self.obstacle == False: # si aparece un obstaculo nos detenemos
+            if data.x == 1.0:
+                self.get_logger().info("obstacle left")
+            if data.y == 1.0:
+                self.get_logger().info("obstacle center")
+            if data.z == 1.0:
+                self.get_logger().info("obstacle right")
+            self.obstacle = True
+
+        elif hay_obstaculo == False and self.obstacle == True: # si se desbloquea el camino
+            self.get_logger().info("camino libre")
+            self.obstacle = False
+
+        else: # mantenerse en nada si el obstaculo sigue bloqueando
+            pass
+
+
+
+
+
+
+
+
+
+
 
     def say_pos(self):
         if self.pos_odo_active:
